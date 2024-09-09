@@ -2634,6 +2634,62 @@ void put_along_axis_grad(const Tensor& x,
   }
 }
 
+
+
+template <typename T>
+void amax_grad(const Tensor& x, 
+               const Tensor& out, 
+               const Tensor& out_grad, 
+               const std::vector<int64_t>& axis, 
+               bool keepdim, 
+               bool reduce_all, 
+               Tensor* x_grad) {
+  if (x_grad) {
+    const int64_t axis_size = axis.size();
+    const int64_t x_dim_size = x.dims().size();
+    if (axis_size == 0 || x_dim_size == 0 || axis_size == x_dim_size || reduce_all) {
+      reduce_all = true;
+    } else {
+      reduce_all = false;
+    }
+
+    std::vector<int64_t> x_dim = common::vectorize<int64_t>(x.dims());
+    std::vector<int64_t> axis_;
+    Tensor out_, out_grad_;
+    
+    if (!keepdim) {
+      if (reduce_all) {
+        for (int64_t i = 0; i < x_dim_size; ++i) {
+          axis_.push_back(i);
+        }
+      } else {
+        axis_ = axis;
+        for (int64_t i = 0; i < axis_size; i++) {
+          if (axis[i] < 0) {
+            axis_[i] = axis[i] + x_dim_size;
+          }
+        }
+      }
+      // reshape and expand
+      auto out_shape = get_unsqueeze_dims(out, axis_);
+      Tensor out_ = reshape<T>(out, out_shape);
+      Tensor out_grad_ = reshape<T>(out_grad, out_shape);
+      out_ = expand<T>(out_, IntArray(x_dim));
+      out_grad_ = expand<T>(out_grad_, IntArray(x_dim));
+    } else {
+      out_ = expand<T>(out, IntArray(x_dim));
+      out_grad_ = expand<T>(out_grad, IntArray(x_dim));
+    }
+    const Tensor zero = full<T>(x.shape(), 0.0, x.dtype());
+    const Tensor one = full<T>(x.shape(), 1.0, x.dtype());
+    Tensor mask = equal<T>(x, out_);
+    Tensor count = sum<T>(where<T>(mask, one, zero), axis_, x.dtype(), true);
+    count = expand<T>(count, IntArray(x_dim));
+    Tensor x_grad_tmp = (out_grad_ * mask) /count;
+    set_output<T>(x_grad_tmp, x_grad);
+  }
+}
+
 }  // namespace details
 }  // namespace primitive
 }  // namespace paddle
