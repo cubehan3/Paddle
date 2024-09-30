@@ -28,6 +28,23 @@ from paddle.base.libpaddle.pir import (
 from paddle.base.wrapped_decorator import signature_safe_contextmanager
 
 # TODO(CZ): to be removed when we support dynamic shape by default.
+
+DYNAMIC_SHAPE_VJP_OPS_BLACKLIST = [
+    "atan",
+    "atan2",
+    "batch_norm",
+    "bce_loss",
+    "expm1",
+    "group_norm",
+    "instance_norm",  #! Inherently Unsupported
+    "layer_norm",
+    "masked_select",  #! Inherently Unsupported
+    "put_along_axis",
+    "slice",  #! Inherently Unsupported
+    "tile",  #! Inherently Unsupported
+]
+
+
 ALLOW_DYNAMIC_SHAPE_VJP_OPS = [
     "pd_op.abs",
     "pd_op.add",
@@ -332,7 +349,7 @@ def dynamic_shape_prim_vjp_guard(op, inputs):
             origin_prim
             and core._enable_prim_skip_dynamic_shape()
             and _check_vjp_dynamic_shape(op, inputs)
-            and op.name() not in ALLOW_DYNAMIC_SHAPE_VJP_OPS
+            and op.name() in DYNAMIC_SHAPE_VJP_OPS_BLACKLIST
         )
 
     try:
